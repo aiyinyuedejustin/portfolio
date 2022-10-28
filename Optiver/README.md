@@ -1,6 +1,6 @@
 This is a project for https://www.kaggle.com/competitions/optiver-realized-volatility-prediction
 
-Download the data and simply run main.ipynb
+Download the data and simply run main.ipynb, feature engineering and model training are all in the same file.
 
 Brief Summary:
 
