@@ -14,7 +14,7 @@ download processed data to input/amex-data-integer-dtypes-parquet-format
 
 4：run code/xgb.ipynb，train xgb(on GPU)
 
-5：run code/fe_v2.ipynb
+5：run code/fe_v2.ipynb, which is a further feature engineering process
 
 6：run  code/lgb_v2.ipynb，train lgb_v2
 
