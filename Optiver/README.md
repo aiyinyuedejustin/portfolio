@@ -1,3 +1,3 @@
 This is a project for https://www.kaggle.com/competitions/optiver-realized-volatility-prediction
 
-Simply run main.py
+Download the data and simply run main.py
