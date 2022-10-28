@@ -32,7 +32,7 @@ The algorithm is developed for customer credit default prediction based on a var
 Based on a large number of user credit card evaluation records, extract features and add features to historical time series data, including but not limited to:
 a) add 'mean', 'std', 'min', 'max' to payment, balance, and spend
 b) add lagged features by cacluate difference between "last" and "first"
-d) delete B_29 feature
+c) delete B_29 feature
 
 The different combinations of the features were trained with LightGBM, XGBoost and CatBoost models. Through correlation analysis, three LightGBM and one XGBoost are  retained. Finally, the linear weighted average method is used to combine the four files.
 
