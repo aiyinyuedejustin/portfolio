@@ -1,5 +1,5 @@
 
-Here are some example code for my research assistant job at UofT. Note that the below brief introduction does not exactly correspond to the code in this folder. The code are just examples.
+Here are some example code for my current research assistant job at UofT. Note that the below brief introduction does not exactly correspond to the code in this folder. The codes are just examples.
 
 The first version of the paper can be find here: https://www.nber.org/papers/w29980. 
 
