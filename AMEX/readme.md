@@ -1,3 +1,6 @@
+This is a project for https://www.kaggle.com/competitions/amex-default-prediction
+
+
 Steps to run:
 
 1：download original data to input/amex-default-prediction；
