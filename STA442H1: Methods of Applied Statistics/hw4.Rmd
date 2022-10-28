@@ -1,0 +1,274 @@
+```{r header, echo=FALSE, results='asis'}
+Pmisc::markdownHeader(
+	title= '"Homework 4"',
+	geometry='margin=1in',
+	date= "Due Dec 2021")
+```
+
+
+```{r setup, include=FALSE}
+library('knitr')
+
+knitr::opts_chunk$set(echo=FALSE, prompt=FALSE, comment=NA,
+		dev='png', margins=1, fig.cap=' ',
+		fig.width=2.5, fig.height=3, half=NULL,
+		tidy=TRUE,tidy.opts=list(indent=2, width.cutoff=55,blank=FALSE)
+)
+
+knit_hooks$set(plot=knitr::hook_plot_tex)
+knitr::knit_hooks$set(margins = Pmisc::hook_plot_margins)
+```
+
+
+
+```{r, getData, eval=FALSE, include=FALSE}
+# election results
+xFiles = unzip('wi_2020.zip')
+x = raster::shapefile(grep("shp$", xFiles, value=TRUE))
+
+# county boundaries
+cFileShp = Pmisc::downloadIfOld('https://www.sciencebase.gov/catalog/file/get/4f4e4a2ee4b07f02db615738&facet=US_County_Boundarie',  file='countyBoundaries.zip')
+wisconsinC1 = raster::shapefile(grep('shp$',cFileShp, value=TRUE))
+
+# subcounty boundaries
+cSubFileShp  = Pmisc::downloadIfOld('https://www2.census.gov/geo/tiger/TIGER2016/COUSUB/tl_2016_55_cousub.zip', path='data')
+wisconsinCsub1 = raster::shapefile(grep('shp$',cSubFileShp, value=TRUE))
+
+# census tract boundaries
+ctFile = Pmisc::downloadIfOld('https://www2.census.gov/geo/pvs/tiger2010st/55_Wisconsin/55/tl_2010_55_tract10.zip', path='../data')
+ct = raster::shapefile(grep("shp$", ctFile, value=TRUE))
+raster::projection(ct) = mapmisc::crsLL
+
+# reproject
+wisconsinCsub2 = sp::spTransform(wisconsinCsub1, 
+    mapmisc::omerc(wisconsinCsub1))
+ct2 = sp::spTransform(ct, wisconsinCsub2@proj4string)
+wisconsinC = sp::spTransform(wisconsinC1[wisconsinC1$STFIPS==55,], wisconsinCsub2@proj4string)
+x = sp::spTransform(x, wisconsinCsub2@proj4string)
+
+```
+```{r}
+# format subcounty data
+wisconsinCsub3 = wisconsinCsub2[wisconsinCsub2$GEOID %in% x$MCD_FIPS,]
+wisconsinCsub4 = rgeos::gUnaryUnion(wisconsinCsub3, wisconsinCsub3$COUSUBFP)
+wisconsinCsub5 = rgeos::gSimplify(wisconsinCsub4, tol=50, TRUE)
+
+cSubData = wisconsinCsub3@data[match(
+    names(wisconsinCsub5), 
+    wisconsinCsub3$COUSUBFP),]
+rownames(cSubData) = names(wisconsinCsub5)
+wisconsinCsub = sp::SpatialPolygonsDataFrame(
+    wisconsinCsub5, cSubData)
+
+# format election results
+x$Total = as.numeric(x$G16PRERTru) + as.numeric(x$G16PREDCli)
+x$trump = as.numeric(x$G16PRERTru)
+x$persons = as.numeric(as.character(x$PERSONS))
+x$pop = pmax(x$persons, x$Total)
+x$white = as.numeric(as.character(x$WHITE))
+x$amindian = as.numeric(as.character(x$AMINDIAN))
+x$propWhite = pmax(x$white / x$pop,0, na.rm=TRUE)
+x$propInd = pmax(x$amindian / x$pop,0, na.rm=TRUE)
+x$area = rgeos::gArea(x, TRUE)/10^6
+x$pdens = x$pop/ x$area
+x$logPdens = log(pmax(1, x$pdens))
+
+```
+
+```{r}
+
+
+# county-level election results
+xAggCounty = aggregate(x@data[,c('white','persons','Total','trump','pop','amindian')], x@data[,c('CNTY_FIPS'), drop=FALSE], sum, na.rm=TRUE)
+wisconsinCm = sp::merge(wisconsinC, xAggCounty, 
+    by.x='CTFIPS', by.y='CNTY_FIPS')
+wisconsinCm$propTrump = wisconsinCm$trump / wisconsinCm$Total
+wisconsinCm$propWhite = wisconsinCm$white / wisconsinCm$persons
+wisconsinCm$propInd = wisconsinCm$amindian / wisconsinCm$persons
+wisconsinCm$area = rgeos::gArea(wisconsinCm, TRUE)/10^6
+wisconsinCm$pdens = wisconsinCm$persons/ wisconsinCm$area
+wisconsinCm$logPdens = log(wisconsinCm$pdens)
+
+# subcounty election results
+xAggSubCounty = aggregate(x@data[,
+    c('white','persons','Total','trump','pop','amindian')], 
+    x@data[,c('COUSUBFP'),drop=FALSE], sum, na.rm=TRUE)
+wisconsinCsubm = sp::merge(wisconsinCsub, xAggSubCounty,
+ by.x='COUSUBFP', by.y='COUSUBFP')
+
+wisconsinCsubm$propTrump = wisconsinCsubm$trump / wisconsinCsubm$Total
+wisconsinCsubm$propWhite = wisconsinCsubm$white / wisconsinCsubm$persons
+wisconsinCsubm$propInd = wisconsinCsubm$amindian / wisconsinCsubm$persons
+wisconsinCsubm$area = rgeos::gArea(wisconsinCsubm, TRUE)/10^6
+wisconsinCsubm$pdens = wisconsinCsubm$persons/ wisconsinCsubm$area
+wisconsinCsubm$logPdens = log(wisconsinCsubm$pdens)
+
+wisconsinTract = x
+wisconsinTract$propTrump = wisconsinTract$trump / wisconsinTract$Total
+save(wisconsinCsubm, wisconsinCm, wisconsinTract, 
+    file='../data/wisconsin.RData')
+```
+
+
+
+```{r bymAll, eval=FALSE}
+
+(load('wisconsin.RData'))
+head(propWhite@wisconsinCsubm)
+#not need
+resC = diseasemapping::bym(trump ~ logPdens + propWhite + propInd, data = wisconsinCm, 
+    prior = list(sd = c(log(2.5), 0.5), propSpatial = c(0.5, 0.5)), 
+    Ntrials = wisconsinCm$Total, family='binomial')
+
+
+resSubC = diseasemapping::bym(trump ~ logPdens + propWhite + propInd, data = wisconsinCsubm, 
+    prior = list(sd = c(log(2.5), 0.5), propSpatial = c(0.5, 0.5)), 
+    Ntrials = wisconsinCsubm$Total, family='binomial')
+
+x2 = x[which(x$pop > 1),]
+resP = diseasemapping::bym(trump ~ logPdens + propWhite + propInd, data = x, 
+    prior = list(sd = c(log(2.5), 0.5), propSpatial = c(0.5, 0.5)), 
+    Ntrials = x$Total, family='binomial')
+
+resP$parameters$summary[,paste0(c(0.5, 0.025, 0.975), 'quant')]
+resSubC$parameters$summary[,paste0(c(0.5, 0.025, 0.975), 'quant')]
+resC$parameters$summary[,paste0(c(0.5, 0.025, 0.975), 'quant')]
+
+
+save(resP, resSubC, resC, file='resWisconsinAll.RData', compress='xz')
+```
+
+
+
+```{r bym, eval=FALSE, echo=TRUE}
+
+resTrump = diseasemapping::bym(trump ~ logPdens + propWhite + propInd, 
+    data = wisconsinCsubm, 
+    prior = list(sd = c(log(1.5), 0.5), propSpatial = c(0.5, 0.5)), 
+    Ntrials = wisconsinCsubm$Total, family='binomial')
+
+save(resTrump, file='resWisconsin.RData', compress='xz')
+```
+
+```{r loadResults, echo=TRUE}
+(load('resWisconsin.RData'))
+
+
+toPrint= resTrump$parameters$summary[,paste0(c(0.5,0.025,0.975),'quant')] 
+colnames(toPrint)=c('est', '2.5','97.5')
+
+100* (exp(toPrint["logPdens",]*diff(quantile(wisconsinCsubm$logPdens,c(0.25,0.75))))-1)
+100* (exp(toPrint["propWhite",]*diff(quantile(wisconsinCsubm$propWhite,c(0.25,0.75))))-1)
+100* (exp(toPrint["propInd",]*diff(quantile(wisconsinCsubm$propInd,c(0.25,0.75))))-1)
+diff(quantile(wisconsinCsubm$propInd,c(0.25,0.75)))
+diff(quantile(wisconsinCsubm$propWhite,c(0.25,0.75)))
+diff(quantile(wisconsinCsubm$logPdens,c(0.25,0.75)))
+
+
+quantile(wisconsinCsubm$logPdens)
+quantile(wisconsinCsubm$propInd)
+quantile(wisconsinCsubm$propWhite)
+toPrint["logPdens",]
+
+
+100* (toPrint["logPdens",]*exp(diff(quantile(wisconsinCsubm$logPdens,c(0.25,0.75))))-1)
+toPrint["logPdens",]*diff(quantile(wisconsinCsubm$logPdens,c(0.25,0.75)))
+```
+
+
+
+```{r plotSetup, echo=FALSE}
+theColTrump = mapmisc::colourScale(wisconsinCsubm$propTrump, col='RdBu', 
+    breaks=sort(unique(setdiff(c(0,1, seq(0.2,0.8,by=0.1)), 0.5))),
+    style='fixed', rev=TRUE)
+theColPop = mapmisc::colourScale(wisconsinCsubm$pdens, col='Spectral', 
+    breaks=11,
+    style='equal', transform='log', digits=1, rev=TRUE)
+
+theColWhite = mapmisc::colourScale(wisconsinCsubm$propWhite, 
+    col='Spectral', 
+    breaks=c(0, 0.5, 0.8, 0.9,seq(0.9, 1, by=0.02)),
+    style='fixed',  rev=TRUE)
+
+theColInd = mapmisc::colourScale(wisconsinCsubm$propInd, 
+    col='Spectral', 
+    breaks=seq(0, 1, by=0.1),
+    style='fixed',  rev=TRUE) 
+
+theBg = mapmisc::tonerToTrans(mapmisc::openmap(wisconsinCm,
+ fact=2, path='stamen-toner'), col='grey30') #county
+
+theInset = mapmisc::openmap(wisconsinCm, zoom=6, path='stamen-watercolor',
+    crs=mapmisc::crsMerc, buffer=c(0,1500,100,700)*1000)
+```
+
+```{r maps, fig.cap='maps', fig.subcap = c('trump','pop dens','ind','white'), fig.height=5, fig.width=6, out.width=Pmisc::out.width(0.47)}
+
+library('sp')
+#1
+mapmisc::map.new(wisconsinCsubm, 0.85)
+sp::plot(wisconsinCsubm, col = theColTrump$plot, add=TRUE,
+    lwd=0.2)
+raster::plot(theBg, add=TRUE, maxpixels=10^7)
+mapmisc::insetMap(wisconsinCsubm, 'bottomright', theInset, 
+    outer=TRUE, width=0.35)
+mapmisc::scaleBar(wisconsinCsubm, 'top', cex=0.8)#add scale bar at top and North
+mapmisc::legendBreaks('topright', theColTrump, bty='n', inset=0)
+#2
+mapmisc::map.new(wisconsinCsubm, 0.85)
+plot(wisconsinCsubm, col = theColPop$plot, add=TRUE,
+    lwd=0.2)
+plot(theBg, add=TRUE, maxpixels=10^7)
+mapmisc::legendBreaks('right', theColPop, bty='n', inset=0)
+#3
+mapmisc::map.new(wisconsinCsubm, 0.85)
+plot(wisconsinCsubm, col = theColInd$plot, add=TRUE,
+    lwd=0.2)
+plot(theBg, add=TRUE, maxpixels=10^7)
+mapmisc::legendBreaks('right', theColInd, bty='n', inset=0)
+
+
+#4
+mapmisc::map.new(wisconsinCsubm, 0.85)
+plot(wisconsinCsubm, col = theColWhite$plot, add=TRUE,
+    lwd=0.2)
+plot(theBg, add=TRUE, maxpixels=10^7)
+mapmisc::legendBreaks('right', theColWhite, bty='n', inset=0)
+```
+
+
+
+```{r plotResultsSetup}
+theColRandom = mapmisc::colourScale(
+    resTrump$data$random.mean, 
+    col='Spectral', breaks = 11,
+    style='quantile',  rev=TRUE, dec=1)
+theColFit= mapmisc::colourScale(
+    resTrump$data$fitted.invlogit, 
+    col='RdBu', rev=TRUE,
+    breaks=sort(unique(setdiff(c(0,1, seq(0.2,0.8,by=0.1)), 0.5))),
+    style='fixed')
+```
+
+```{r plotResultTrump, fig.cap='results', fig.subcap=c('random','fitted'), fig.height=5, fig.width=6, out.width=Pmisc::out.width(0.47)}
+mapmisc::map.new(wisconsinCsubm, 0.85)
+plot(resTrump$data, col = theColRandom$plot, add=TRUE,
+    lwd=0.2)
+plot(theBg, add=TRUE, maxpixels=10^7)
+mapmisc::legendBreaks('topright', theColRandom)
+
+
+mapmisc::map.new(wisconsinCsubm, 0.85)
+plot(resTrump$data, col = theColFit$plot, add=TRUE,
+    lwd=0.2)
+plot(theBg, add=TRUE, maxpixels=10^7)
+mapmisc::legendBreaks('topright', theColFit)
+
+```
+
+
+```{r table, echo=TRUE}
+knitr::kable(resTrump$parameters$summary[,paste0(c(0.5, 0.025, 0.975), 'quant')],digits=3)
+knitr::kable(resTrump$data)
+exp(-0.56)
+```
