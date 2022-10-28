@@ -2,7 +2,7 @@ This is a project for https://www.kaggle.com/competitions/optiver-realized-volat
 
 Download the data and simply run main.ipynb
 
-Description:
+Brief Summary:
 
 1. Based on the actual quotation and trading data of stocks, extract a series of feature combinations F1 of trading spread, quotation spread, trading volume, etc.; use the clustering algorithm to cluster 113 classes of stocks into 7 classes and calculate the above feature combination F2 of these 7 classes; use the KNN algorithm to find the most similar data points in time sequence and calculate the feature combination F3 in the most similar time; combine F1, F2, F3 to get the final feature vector F.
 
