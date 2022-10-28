@@ -11,4 +11,4 @@ download processed data to input/amex-data-integer-dtypes-parquet-format
 8：run code/combine.ipynb，get combined results
 
 
-It might need 64 GB RAM to run
+It might need 64 GB Memory to run
